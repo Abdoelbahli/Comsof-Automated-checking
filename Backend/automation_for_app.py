@@ -12,41 +12,61 @@ __all__ = ['check_osc_duplicates', 'check_invalid_cable_refs', 'report_splice_co
 
 
 def check_osc_duplicates(workspace):
+    """
+    Checks for duplicated ID values in OUT_Closures.shp (which represent OSCs)
+    
+    Args:
+        workspace (str): Path to the directory containing shapefiles
+    
+    Returns:
+        tuple: (has_issues, message) where:
+            has_issues: True if duplicates found, False if no duplicates, None if errors
+            message: Validation results
+    """
     output = []
     try:
         shapefile_path = os.path.join(workspace, "OUT_Closures.shp")
         
         if not os.path.isfile(shapefile_path):
-            output.append(f"⛔ Error: OUT_Closures.shp not found in workspace: {workspace}")
+            output.append("⛔ Error: OUT_Closures.shp not found")
             return None, "\n".join(output)
 
         gdf = gpd.read_file(shapefile_path)
         
-        if 'LINKED_AGG' not in gdf.columns:
-            output.append("⛔ Error: 'LINKED_AGG' column not found in the shapefile")
+        # Check for required column
+        if 'ID' not in gdf.columns:
+            output.append("⛔ Error: 'ID' column not found in OUT_Closures.shp")
             return None, "\n".join(output)
 
-        duplicates = gdf['LINKED_AGG'].duplicated(keep=False)
+        # Check for duplicate IDs
+        duplicates = gdf['ID'].duplicated(keep=False)
         
         if duplicates.any():
-            output.append("\n⚠️  We have a problem of duplicated OSCs! ⚠️")
+            output.append("\n⚠️  CRITICAL ERROR: Duplicated OSC IDs found! ⚠️")
             output.append(f"Total duplicated entries: {duplicates.sum()}")
             
-            duplicates_df = gdf[duplicates]['LINKED_AGG'].value_counts().reset_index()
-            duplicates_df.columns = ['OSC Value', 'Duplicate Count']
+            # Get duplicate values and their counts
+            duplicates_df = gdf[duplicates]['ID'].value_counts().reset_index()
+            duplicates_df.columns = ['OSC ID', 'Duplicate Count']
             
-            output.append("\nDuplicate occurrences:")
+            output.append("\nDuplicate OSC IDs:")
             output.append(duplicates_df.to_string(index=False))
+            
+            # Show sample of problematic closures
+            problem_closures = gdf[duplicates].head(5)
+            output.append("\nSample of problematic closures:")
+            output.append(problem_closures[['ID', 'IDENTIFIER']].to_string(index=False))
+            
             return True, "\n".join(output)
         else:
-            output.append("\n✅ Everything is okay - no duplicated OSCs found!")
+            output.append("\n✅ Everything is okay - no duplicated OSC IDs found!")
             return False, "\n".join(output)
             
     except Exception as e:
         output.append(f"⛔ Error reading shapefile: {e}")
         return None, "\n".join(output)
-
-
+    
+    
  ##############################################################################################################   
 
 def process_shapefiles(workspace):
@@ -222,10 +242,11 @@ def check_invalid_cable_refs(workspace):
 
 def report_splice_counts_by_closure(workspace):
     """
-    Reports the number of splices per closure
-    Returns: (is_report, message) tuple (status always False for reports)
+    Reports the number of splices per closure and checks against maximum limits
+    Returns: tuple (has_issues, message)
     """
     output = []
+    has_issues = False
     
     # Define maximum splice limits for each closure type
     MAX_SPLICE_LIMITS = {
@@ -243,10 +264,10 @@ def report_splice_counts_by_closure(workspace):
         output.append("🔍 Reporting splices per closure type")
         
         if not os.path.exists(closure_file):
-            output.append("❌ Missing file: OUT_Closures.shp")
+            output.append("⛔ Error: OUT_Closures.shp not found")
             return None, "\n".join(output)
         if not os.path.exists(splice_file):
-            output.append("❌ Missing file: OUT_Splices.shp")
+            output.append("⛔ Error: OUT_Splices.shp not found")
             return None, "\n".join(output)
         
         closures = gpd.read_file(closure_file)
@@ -283,8 +304,9 @@ def report_splice_counts_by_closure(workspace):
                         'max_limit': max_limit
                     })
         
-        # Report results
+        # Report results - MAINTAIN ORIGINAL OUTPUT FORMAT
         if problematic_closures:
+            has_issues = True
             output.append(f"{'Closure Type':<30} {'Closure ID':<20} {'# Splices':<10} {'Message'}")
             output.append("-" * 100)
             
@@ -293,10 +315,10 @@ def report_splice_counts_by_closure(workspace):
                 output.append(f"{closure['identifier']:<30} {closure['closure_id']:<20} {closure['splice_count']:<10} {message}")
             
             output.append(f"\n❌ Found {len(problematic_closures)} closure(s) exceeding splice limits.")
-            return False, "\n".join(output)  # Always False status for reports
         else:
             output.append("✅ All closures are within their maximum splice limits.")
-            return False, "\n".join(output)  # Always False status for reports
+        
+        return has_issues, "\n".join(output)
         
     except Exception as e:
         output.append(f"⛔ Unexpected error: {str(e)}")
@@ -487,7 +509,9 @@ def validate_non_virtual_closures(workspace):
 
 def validate_feeder_primdistribution_locations(workspace, tolerance=0.01):
     """
-    Validates that Feeder Points and Primary Distribution Points are not co-located.
+    Validates critical point locations:
+    1. Feeder Point and Primary Distribution Point should be separated
+    2. No Distribution Point should lie on top of Primary Distribution Points
     
     Args:
         workspace (str): Path to Comsof output directory
@@ -495,61 +519,128 @@ def validate_feeder_primdistribution_locations(workspace, tolerance=0.01):
         
     Returns:
         tuple: (has_issues, message) where:
-            has_issues: True if points are too close, False otherwise
+            has_issues: True if issues found, False otherwise
             message: Detailed validation results
     """
     output = []
     has_issues = False
+    all_issues = []
     
     try:
+        # Paths to all required shapefiles
         feeder_path = os.path.join(workspace, "OUT_FeederPoints.shp")
         prim_path = os.path.join(workspace, "OUT_PrimDistributionPoints.shp")
+        dist_path = os.path.join(workspace, "OUT_DistributionPoints.shp")
         
-        output.append("\n🔍 Validating Feeder and Primary Distribution Point locations...")
+        output.append("\n🔍 Validating critical point locations...")
+        
+        # ==================================================================
+        # 1. Validate Feeder Point vs Primary Distribution Point
+        # ==================================================================
+        output.append("\n=== Feeder Point vs Primary Distribution Point ===")
         
         # Check if files exist
         if not os.path.exists(feeder_path):
             output.append("⛔ Error: OUT_FeederPoints.shp not found")
-            return None, "\n".join(output)
+            all_issues.append("feeder_missing")
         if not os.path.exists(prim_path):
             output.append("⛔ Error: OUT_PrimDistributionPoints.shp not found")
-            return None, "\n".join(output)
+            all_issues.append("prim_missing")
         
-        # Load shapefiles
-        feeder_points = gpd.read_file(feeder_path)
-        prim_points = gpd.read_file(prim_path)
-        
-        # Check if each file has exactly one point
-        if len(feeder_points) != 1:
-            output.append(f"⚠️ Warning: OUT_FeederPoints.shp has {len(feeder_points)} features (expected 1)")
-        if len(prim_points) != 1:
-            output.append(f"⚠️ Warning: OUT_PrimDistributionPoints.shp has {len(prim_points)} features (expected 1)")
-        
-        if len(feeder_points) > 0 and len(prim_points) > 0:
-            # Get the first point from each file
-            feeder_geom = feeder_points.geometry.iloc[0]
-            prim_geom = prim_points.geometry.iloc[0]
+        if "feeder_missing" not in all_issues and "prim_missing" not in all_issues:
+            # Load shapefiles
+            feeder_points = gpd.read_file(feeder_path)
+            prim_points = gpd.read_file(prim_path)
             
-            # Calculate distance between points
-            distance = feeder_geom.distance(prim_geom)
+            # Check if files have points
+            if len(feeder_points) == 0:
+                output.append("⛔ Error: OUT_FeederPoints.shp is empty")
+                all_issues.append("feeder_empty")
+            if len(prim_points) == 0:
+                output.append("⛔ Error: OUT_PrimDistributionPoints.shp is empty")
+                all_issues.append("prim_empty")
             
-            if distance < tolerance:
-                has_issues = True
-                # Get coordinates for reporting
-                feeder_coords = (feeder_geom.x, feeder_geom.y)
-                prim_coords = (prim_geom.x, prim_geom.y)
+            if len(feeder_points) > 0 and len(prim_points) > 0:
+                # Get the first point from each file
+                feeder_geom = feeder_points.geometry.iloc[0]
+                prim_geom = prim_points.geometry.iloc[0]
                 
-                output.append("\n⚠️  CRITICAL ISSUE: Feeder and Primary Distribution Points are too close!")
-                output.append(f"Distance between points: {distance:.6f} units (tolerance: {tolerance} units)")
-                output.append(f"Feeder Point location: X={feeder_coords[0]:.6f}, Y={feeder_coords[1]:.6f}")
-                output.append(f"Primary Distribution Point location: X={prim_coords[0]:.6f}, Y={prim_coords[1]:.6f}")
-                output.append("\n❌ These points should not be co-located. Please verify in GIS software.")
-            else:
-                output.append("\n✅ Validation passed - points are sufficiently separated")
-                output.append(f"Distance between points: {distance:.6f} units (minimum required: {tolerance} units)")
+                # Calculate distance between points
+                distance = feeder_geom.distance(prim_geom)
+                
+                if distance < tolerance:
+                    has_issues = True
+                    # Get coordinates for reporting
+                    feeder_coords = (feeder_geom.x, feeder_geom.y)
+                    prim_coords = (prim_geom.x, prim_geom.y)
+                    
+                    output.append("\n⚠️  CRITICAL ISSUE: Feeder and Primary Distribution Points are too close!")
+                    output.append(f"Distance between points: {distance:.6f} units (tolerance: {tolerance} units)")
+                    output.append(f"Feeder Point location: X={feeder_coords[0]:.6f}, Y={feeder_coords[1]:.6f}")
+                    output.append(f"Primary Point location: X={prim_coords[0]:.6f}, Y={prim_coords[1]:.6f}")
+                    output.append("\n❌ These points should not be co-located. Please verify in GIS software.")
+                else:
+                    output.append("\n✅ Validation passed - points are sufficiently separated")
+                    output.append(f"Distance: {distance:.6f} units (required > {tolerance} units)")
+        
+        # ==================================================================
+        # 2. Validate Distribution Points vs Primary Distribution Points
+        # ==================================================================
+        output.append("\n=== Distribution Points vs Primary Distribution Points ===")
+        
+        # Check if distribution points file exists
+        if not os.path.exists(dist_path):
+            output.append("⛔ Error: OUT_DistributionPoints.shp not found")
+            all_issues.append("dist_missing")
         else:
-            output.append("\n⛔ Cannot perform validation - one or both files are empty")
-            return None, "\n".join(output)
+            dist_points = gpd.read_file(dist_path)
+            
+            if len(dist_points) == 0:
+                output.append("✅ Validation passed - Distribution Points file is empty")
+            else:
+                # Check if we have prim points to compare against
+                if "prim_missing" in all_issues or "prim_empty" in all_issues:
+                    output.append("⛔ Cannot perform validation - Primary Distribution Points are missing or empty")
+                else:
+                    # Create spatial index for prim points for efficient searching
+                    prim_sindex = prim_points.sindex
+                    
+                    # Find distribution points too close to any prim point
+                    problem_points = []
+                    
+                    for idx, dist_row in dist_points.iterrows():
+                        dist_geom = dist_row.geometry
+                        
+                        # Find possible matches using spatial index
+                        possible_matches_index = list(prim_sindex.intersection(dist_geom.bounds))
+                        possible_matches = prim_points.iloc[possible_matches_index]
+                        
+                        # Check exact distance to each possible match
+                        for _, prim_row in possible_matches.iterrows():
+                            distance = dist_geom.distance(prim_row.geometry)
+                            if distance < tolerance:
+                                problem_points.append({
+                                    'dist_id': dist_row.get('ID', idx),
+                                    'dist_coords': (dist_geom.x, dist_geom.y),
+                                    'prim_id': prim_row.get('ID', 'Unknown'),
+                                    'distance': distance
+                                })
+                                break  # Only need one violation per distribution point
+                    
+                    if problem_points:
+                        has_issues = True
+                        output.append(f"\n⚠️  PROBLEM: Found {len(problem_points)} Distribution Points too close to Primary Distribution Points")
+                        output.append(f"Maximum allowed distance: {tolerance} units")
+                        output.append("\nProblematic Distribution Points (first 5):")
+                        
+                        # Show first 5 problems
+                        for point in problem_points[:5]:
+                            output.append(f"  Distribution Point ID: {point['dist_id']}")
+                            output.append(f"    Coordinates: X={point['dist_coords'][0]:.6f}, Y={point['dist_coords'][1]:.6f}")
+                            output.append(f"    Distance to Primary Point ({point['prim_id']}): {point['distance']:.6f} units")
+                            output.append("")
+                    else:
+                        output.append("\n✅ Validation passed - No Distribution Points too close to Primary Distribution Points")
         
         return has_issues, "\n".join(output)
         
