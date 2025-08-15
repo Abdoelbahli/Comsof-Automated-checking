@@ -1,0 +1,81 @@
+/* Custom styles for validation results UI */
+.result-card {
+  border-radius: 1rem;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+  margin-bottom: 2rem;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  transition: box-shadow 0.2s;
+}
+.result-card:hover {
+  box-shadow: 0 4px 24px rgba(0,0,0,0.12);
+}
+.result-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #f3f4f6;
+}
+.result-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #1f2937;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.result-status {
+  font-size: 0.95rem;
+  font-weight: 600;
+  border-radius: 0.5rem;
+  padding: 0.25rem 0.75rem;
+  display: inline-block;
+}
+.status-passed {
+  background: #d1fae5;
+  color: #065f46;
+}
+.status-failed {
+  background: #fee2e2;
+  color: #991b1b;
+}
+.status-error {
+  background: #fef3c7;
+  color: #92400e;
+}
+.result-section {
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+}
+.result-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 0.5rem;
+}
+.result-table th, .result-table td {
+  border: 1px solid #e5e7eb;
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+}
+.result-table th {
+  background: #f3f4f6;
+  font-weight: 600;
+}
+.result-list {
+  margin-top: 0.5rem;
+  padding-left: 1.5rem;
+}
+.result-badge {
+  font-size: 0.85rem;
+  font-weight: 500;
+  border-radius: 0.5rem;
+  padding: 0.2rem 0.6rem;
+  margin-left: 0.5rem;
+  background: #e0e7ff;
+  color: #3730a3;
+}
+.result-tooltip {
+  border-bottom: 1px dotted #6b7280;
+  cursor: help;
+}

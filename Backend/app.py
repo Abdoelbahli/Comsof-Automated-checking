@@ -1,20 +1,25 @@
+import io
 import os
+import json
+import datetime
+from flask import Flask, request, jsonify, send_from_directory, Response
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter, landscape
+from reportlab.lib.units import inch
+from reportlab.platypus import (
+    SimpleDocTemplate, Paragraph, Spacer,
+    Table, TableStyle, Image, PageBreak
+)
+import shutil
+from werkzeug.exceptions import RequestEntityTooLarge
 import zipfile
 import tempfile
-import shutil
-from flask import Flask, request, jsonify, send_from_directory, Response
-from werkzeug.exceptions import RequestEntityTooLarge
 from flask_cors import CORS
-
-from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.enums import TA_CENTER
-from reportlab.lib import colors
-from datetime import datetime
-import io
-import json
+from reportlab.lib.styles import ParagraphStyle
+from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT
 from pdf_styles import get_pdf_styles
+from pdf_generator import generate_validation_report_pdf
+
 
 from automation_for_app import (
     check_osc_duplicates, check_invalid_cable_refs,
@@ -72,7 +77,11 @@ def validate():
     try:
         # Check if file is in request
         if 'file' not in request.files:
-            return jsonify({'error': 'No file uploaded'}), 400
+            return jsonify({
+                'status': 'error',
+                'error': 'No file uploaded',
+                'data': None
+            }), 400
             
         file = request.files['file']
         if file.filename == '':
@@ -231,79 +240,42 @@ def serve_react_app(path):
         return send_from_directory(app.static_folder, 'index.html')
 
 
-
-
-# Export validation results as PDF
-
+# ------------------------------------------------------------------
+# PDF export
+# ------------------------------------------------------------------
 @app.route('/export-pdf', methods=['POST'])
 def export_pdf():
-    """Export validation results as PDF"""
+    """
+    Export validation results as a professional PDF report.
+    Uses the dedicated PDF generator module for clean separation of concerns.
+    """
     try:
         data = request.get_json()
+        
+        # Debug logging
+        app.logger.info(f"Received PDF export request with data keys: {list(data.keys()) if data else 'None'}")
+        
         if not data or 'results' not in data:
-            return jsonify({'error': 'Invalid export request'}), 400
-        
-        # Add a section showing which checks were run
-        '''selected_checks = [check[0] for check in data['results']]
-        elements.append(Paragraph("Selected Checks:", styles['section']))
-        for check in selected_checks:
-            elements.append(Paragraph(f"- {check}", styles['normal']))
-        elements.append(Spacer(1, 12))'''
-        
-        # Get basic styles
-        styles = get_pdf_styles()
-        
-        # Create PDF in memory
-        buffer = io.BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=letter)
-        elements = []
-        styles = get_pdf_styles()
-        
-        # Title and metadata
-        elements.append(Paragraph("Comsof Validation Report", styles['title']))
-        elements.append(Spacer(1, 12))
-        elements.append(Paragraph(f"File: {data.get('filename', 'Unknown')}", styles['normal']))
-        elements.append(Paragraph(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", styles['normal']))
-        elements.append(Spacer(1, 24))
-        
-        # Add section showing which checks were run
-        elements.append(Paragraph("Checks Performed:", styles['heading2']))
-        checks_run = [result[0] for result in data['results']]
-        checks_text = ", ".join(checks_run)
-        elements.append(Paragraph(checks_text, styles['normal']))
-        elements.append(Spacer(1, 24))
-        
-        
-        # Add detailed results
-        elements.append(Paragraph("Detailed Results", styles['section']))
-        
-        for i, (name, status, message) in enumerate(data['results']):
-            # Add result header
-            status_text = "Passed" if status is False else "Failed" if status is True else "Error"
-            elements.append(Paragraph(f"{i+1}. {name} - {status_text}", styles['result_title']))
-            
-            # Clean and format message
-            clean_message = message.replace('\n', '<br/>')
-            elements.append(Paragraph(clean_message, styles['normal']))
-            
-            elements.append(Spacer(1, 12))
-        
-        # Generate PDF
-        doc.build(elements)
-        buffer.seek(0)
-        
-        # Prepare response
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"validation_report_{data.get('filename', timestamp).replace('.zip', '')}.pdf"
-        
-        return Response(
-            buffer,
-            mimetype="application/pdf",
-            headers={"Content-Disposition": f"attachment;filename={filename}"}
-        )
-        
-    except Exception as e:
-        return jsonify({'error': f'PDF export failed: {str(e)}'}), 500
+            return jsonify({'error': 'Invalid export request - missing results data'}), 400
 
-if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+        # Validate results format
+        results = data['results']
+        if not isinstance(results, list):
+            return jsonify({'error': 'Results must be a list'}), 400
+            
+        app.logger.info(f"Processing {len(results)} validation results for PDF")
+        
+        # Log a sample of the results for debugging
+        if results:
+            sample_result = results[0]
+            app.logger.info(f"Sample result: {sample_result}")
+
+        # Generate PDF using the dedicated module
+        return generate_validation_report_pdf(data, app.root_path)
+
+    except Exception as exc:
+        app.logger.exception("PDF generation failed")
+        return jsonify({"error": f"PDF export failed: {str(exc)}"}), 500
+    
+if __name__ == "__main__":
+    app.run(debug=True, host="0.0.0.0", port=5000)

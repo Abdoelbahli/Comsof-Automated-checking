@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ report_title }}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Header Section -->
+    <div class="header">
+        <div class="company-info">
+            <div class="logo-container">
+                <div class="logo-text">MS</div>
+            </div>
+            <div class="company-text">
+                <h1 class="company-name">MDesign Solutions</h1>
+                <p class="company-subtitle">Comsof Validation Services</p>
+            </div>
+        </div>
+        <div class="report-meta">
+            <h2 class="report-title">{{ report_title }}</h2>
+            <p class="document-info">Generated on {{ generation_date }}</p>
+            <p class="document-info">File: <span class="filename">{{ filename }}</span></p>
+        </div>
+    </div>
+
+    <!-- Executive Summary -->
+    <div class="summary-section">
+        <h2 class="section-title">Executive Summary</h2>
+        
+        <div class="stats-grid">
+            <div class="stat-card stat-total">
+                <div class="stat-number">{{ stats.total_checks }}</div>
+                <div class="stat-label">Total Checks</div>
+            </div>
+            <div class="stat-card stat-passed">
+                <div class="stat-number">{{ stats.passed_checks }}</div>
+                <div class="stat-label">Passed</div>
+            </div>
+            <div class="stat-card stat-failed">
+                <div class="stat-number">{{ stats.failed_checks }}</div>
+                <div class="stat-label">Failed</div>
+            </div>
+            <div class="stat-card stat-error">
+                <div class="stat-number">{{ stats.error_checks }}</div>
+                <div class="stat-label">Errors</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detailed Results -->
+    <div class="results-section">
+        <h2 class="section-title">Detailed Validation Results</h2>
+        <p class="results-subtitle">Analysis of: <code>{{ filename }}</code></p>
+        <div class="divider"></div>
+        
+        {% for result in results %}
+        <div class="check {% if result.status == 'failed' %}check-failed{% elif result.status == 'passed' %}check-passed{% else %}check-error{% endif %}">
+            <div class="check-header">
+                <div class="check-info">
+                    <span class="check-number">{{ loop.index }}</span>
+                    <h3 class="check-title">{{ result.check_name }}</h3>
+                </div>
+                <div class="status-container">
+                    <span class="status status-{{ result.status }}">
+                        <i class="icon-{{ result.status }}"></i>
+                        {{ result.status|title }}
+                    </span>
+                </div>
+            </div>
+            
+            <div class="check-content">
+                <div class="check-message">
+                    {% if result.summary %}
+                        {% if result.summary.message is string %}
+                            {% set lines = result.summary.message.split('\n') %}
+                            {% for line in lines %}
+                                {% if line.strip() %}
+                                    {% if 'CRITICAL' in line.upper() or 'ERROR' in line.upper() %}
+                                        <div class="message-line critical-line">
+                                            <i class="icon-critical"></i>
+                                            {{ line }}
+                                        </div>
+                                    {% elif 'WARNING' in line.upper() or 'PROBLEM' in line.upper() %}
+                                        <div class="message-line warning-line">
+                                            <i class="icon-warning"></i>
+                                            {{ line }}
+                                        </div>
+                                    {% elif line.startswith('Node ID') or line.startswith('---') or 'CAB_GROUP' in line or 'AGG_ID' in line %}
+                                        <div class="message-line code-line">
+                                            <i class="icon-code"></i>
+                                            <code>{{ line }}</code>
+                                        </div>
+                                    {% else %}
+                                        <div class="message-line">
+                                            <i class="icon-info"></i>
+                                            {{ line }}
+                                        </div>
+                                    {% endif %}
+                                {% endif %}
+                            {% endfor %}
+                        {% else %}
+                            {# Handle structured summary data #}
+                            {% if result.summary.has_issues is defined and result.summary.has_issues %}
+                                {% if result.summary.total_duplicates is defined %}
+                                    <div class="message-line warning-line">
+                                        <i class="icon-warning"></i>
+                                        Found {{ result.summary.total_duplicates }} duplicated entries
+                                    </div>
+                                {% endif %}
+                                {% if result.summary.sample_closures %}
+                                    <div class="code-line">
+                                        <i class="icon-code"></i>
+                                        Sample problematic closures:
+                                        {% for closure in result.summary.sample_closures %}
+                                            <br>ID: {{ closure.ID }}, Identifier: {{ closure.IDENTIFIER }}
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            {% else %}
+                                <div class="message-line">
+                                    <i class="icon-info"></i>
+                                    No issues found
+                                </div>
+                            {% endif %}
+                        {% endif %}
+                    {% else %}
+                        <div class="message-line">
+                            <i class="icon-info"></i>
+                            No detailed information available
+                        </div>
+                    {% endif %}
+                </div>
+
+                {% if result.details %}
+                    <div class="details-section">
+                        <h4>Additional Details</h4>
+                        {% for detail in result.details %}
+                            <div class="detail-item">
+                                {% if detail.osc_id is defined %}
+                                    <div class="code-line">
+                                        <i class="icon-code"></i>
+                                        OSC ID: {{ detail.osc_id }}, Duplicate Count: {{ detail.duplicate_count }}
+                                    </div>
+                                {% else %}
+                                    <div class="message-line">
+                                        <i class="icon-info"></i>
+                                        {{ detail }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+
+                {% if result.errors %}
+                    <div class="errors-section">
+                        <h4>Errors</h4>
+                        {% for error in result.errors %}
+                            <div class="error-item critical-line">
+                                <i class="icon-critical"></i>
+                                {% if error.type is defined %}
+                                    {{ error.type }}: {{ error.message }}
+                                {% else %}
+                                    {{ error }}
+                                {% endif %}
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+                
+                <div class="check-footer {{ result.status }}-footer">
+                    <i class="icon-{{ result.status }}"></i>
+                    {% if result.status == 'failed' %}
+                        <span class="footer-text">Action Required: This check identified issues that need attention</span>
+                    {% elif result.status == 'passed' %}
+                        <span class="footer-text">Validation Passed: All criteria met successfully</span>
+                    {% else %}
+                        <span class="footer-text">Check Error: This validation could not be completed</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Summary Footer -->
+    <div class="report-footer">
+        <div class="footer-content">
+            <div class="footer-section">
+                <h4>Report Summary</h4>
+                <p>This automated validation report analyzed <strong>{{ stats.total_checks }}</strong> different aspects of your Comsof network design.</p>
+                
+                {% if stats.failed_checks > 0 %}
+                    <div class="summary-alert alert-failed">
+                        <strong>Action Required:</strong> {{ stats.failed_checks }} check{{ 's' if stats.failed_checks != 1 else '' }} found issues that require attention.
+                    </div>
+                {% endif %}
+                
+                {% if stats.error_checks > 0 %}
+                    <div class="summary-alert alert-error">
+                        <strong>Technical Issues:</strong> {{ stats.error_checks }} check{{ 's' if stats.error_checks != 1 else '' }} could not be completed due to errors.
+                    </div>
+                {% endif %}
+                
+                {% if stats.failed_checks == 0 and stats.error_checks == 0 %}
+                    <div class="summary-alert alert-success">
+                        <strong>All checks passed successfully.</strong>
+                    </div>
+                {% endif %}
+            </div>
+            
+            <div class="footer-section">
+                <h4>Support Information</h4>
+                <p>This report was automatically generated by the Comsof Validation System.</p>
+                <p>For technical support or questions about these results, please contact:</p>
+                <p class="contact-info">
+                    support@mdesignsolutions.com<br>
+                    www.mdesignsolutions.com
+                </p>
+            </div>
+        </div>
+        
+        <div class="footer-bottom">
+            <p class="footer-timestamp">
+                Generated on {{ generation_date }} | 
+                Document: {{ filename }} | 
+                MDesign Solutions Comsof Validation Services
+            </p>
+        </div>
+    </div>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            font-size: 11pt;
+            line-height: 1.6;
+            color: #2d3748;
+            background: #ffffff;
+            margin: 0;
+            padding: 0;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 2cm;
+            padding-bottom: 1cm;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        .company-info {
+            display: flex;
+            align-items: center;
+            gap: 1cm;
+        }
+
+        .logo-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 4cm;
+            height: 4cm;
+            background: #4a5568;
+            border-radius: 8px;
+            color: white;
+            font-weight: bold;
+            font-size: 20pt;
+        }
+
+        .company-name {
+            font-size: 20pt;
+            font-weight: 700;
+        }
+
+        .company-subtitle {
+            font-size: 10pt;
+            color: #718096;
+        }
+
+        .report-title {
+            font-size: 18pt;
+            font-weight: 600;
+        }
+
+        .document-info {
+            font-size: 10pt;
+            color: #718096;
+        }
+
+        .filename {
+            font-family: 'Fira Code', monospace;
+            background: #f7fafc;
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+
+        .summary-section {
+            background: #f7fafc;
+            border-radius: 8px;
+            padding: 1.5cm;
+            margin-bottom: 2cm;
+            border-left: 4px solid #4a5568;
+        }
+
+        .section-title {
+            font-size: 14pt;
+            font-weight: 600;
+            margin-bottom: 1cm;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1cm;
+            margin-bottom: 1.5cm;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 6px;
+            padding: 1cm;
+            text-align: center;
+            border-top: 3px solid;
+        }
+
+        .stat-total { border-top-color: #4a5568; }
+        .stat-passed { border-top-color: #48bb78; }
+        .stat-failed { border-top-color: #f56565; }
+        .stat-error { border-top-color: #ed8936; }
+
+        .stat-number {
+            font-size: 18pt;
+            font-weight: 700;
+            margin-bottom: 0.3cm;
+        }
+
+        .stat-label {
+            font-size: 9pt;
+            color: #718096;
+            text-transform: uppercase;
+        }
+
+        .progress-container {
+            background: white;
+            border-radius: 6px;
+            padding: 1cm;
+        }
+
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.5cm;
+        }
+
+        .progress-title {
+            font-weight: 600;
+            font-size: 12pt;
+        }
+
+        .progress-percentage-large {
+            font-size: 16pt;
+            font-weight: 700;
+            color: #4a5568;
+        }
+
+        .progress-bar {
+            height: 10px;
+            background: #e2e8f0;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: #4a5568;
+        }
+
+        .results-section {
+            margin-bottom: 2cm;
+        }
+
+        .results-subtitle {
+            font-size: 10pt;
+            color: #718096;
+            margin-bottom: 1cm;
+        }
+
+        .divider {
+            height: 1px;
+            background: #e2e8f0;
+            margin: 1cm 0;
+        }
+
+        .check {
+            margin-bottom: 1.5cm;
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+        }
+
+        .check-header {
+            display: flex;
+            justify-content: space-between;
+            background: #f7fafc;
+            padding: 0.8cm;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .check-number {
+            background: #4a5568;
+            color: white;
+            border-radius: 50%;
+            padding: 0.2cm 0.6cm;
+        }
+
+        .status-passed { color: #22543d; }
+        .status-failed { color: #742a2a; }
+        .status-error { color: #7b341e; }
+
+        .check-content {
+            padding: 1cm;
+        }
+
+        .critical-line {
+            color: #e53e3e;
+            background: rgba(229,62,62,0.1);
+            padding: 0.2cm;
+            border-left: 3px solid #e53e3e;
+        }
+
+        .warning-line {
+            color: #d69e2e;
+            background: rgba(214,158,46,0.1);
+            padding: 0.2cm;
+            border-left: 3px solid #d69e2e;
+        }
+
+        .code-line {
+            font-family: 'Fira Code', monospace;
+            background: #f7fafc;
+            padding: 0.2cm;
+        }
+
+        .check-footer {
+            font-size: 9pt;
+            padding: 0.6cm;
+        }
+
+        .passed-footer { background: #c6f6d5; }
+        .failed-footer { background: #fed7d7; }
+        .error-footer { background: #feebc8; }
+
+        .report-footer {
+            background: #f7fafc;
+            border-radius: 8px;
+            padding: 1.5cm;
+            border-top: 3px solid #4a5568;
+        }
+
+        .footer-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2cm;
+            margin-bottom: 1cm;
+        }
+
+        .footer-timestamp {
+            font-size: 8pt;
+            text-align: center;
+            color: #718096;
+            font-style: italic;
+        }
+
+        /* New Sections */
+        .details-section,
+        .errors-section {
+            margin-top: 1cm;
+            padding: 0.5cm;
+            background: #f8fafc;
+            border-radius: 6px;
+        }
+
+        .details-section h4,
+        .errors-section h4 {
+            font-size: 10pt;
+            font-weight: 600;
+            color: #4a5568;
+            margin: 0 0 0.5cm 0;
+        }
+
+        .detail-item,
+        .error-item {
+            margin-bottom: 0.3cm;
+        }
+
+        .detail-item:last-child,
+        .error-item:last-child {
+            margin-bottom: 0;
+        }
+
+        /* Message formatting */
+        .message-line {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.3cm;
+            padding: 0.3cm;
+            margin-bottom: 0.2cm;
+            border-radius: 4px;
+        }
+
+        .message-line i {
+            flex-shrink: 0;
+            width: 16px;
+            height: 16px;
+            margin-top: 3px;
+        }
+
+        .message-line:last-child {
+            margin-bottom: 0;
+        }
+
+        /* Status colors */
+        .passed-footer { 
+            background: #f0fff4; 
+            color: #22543d;
+        }
+        .failed-footer { 
+            background: #fff5f5; 
+            color: #742a2a;
+        }
+        .error-footer { 
+            background: #fffaf0; 
+            color: #7b341e;
+        }
+    </style>
+</body>
+</html>

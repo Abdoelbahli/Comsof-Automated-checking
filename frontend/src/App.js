@@ -1,3 +1,4 @@
+import "./results.css";
 import React, { useState, useCallback } from 'react';
 import { Upload, FileText, CheckCircle, AlertCircle, XCircle, Loader2, Download, AlertTriangle, Menu, Home, Info, Settings, HelpCircle } from 'lucide-react';
 
@@ -149,7 +150,7 @@ const handleExportPDF = async () => {
       formData.append('checks', JSON.stringify(checksToRun));
 
       try {
-        const response = await fetch('/validate', {
+        const response = await fetch('http://127.0.0.1:5000/validate', {
           method: 'POST',
           body: formData,
         });
@@ -453,66 +454,242 @@ const handleExportPDF = async () => {
           <>
             {/* Validation Summary */}
             <div className="bg-white rounded-xl shadow-lg p-8 mb-8">
-              <div className="flex items-center mb-6">
-                <CheckCircle className="w-6 h-6 text-green-500 mr-2" />
-                <h2 className="text-2xl font-bold text-gray-800">
-                  Validation Summary for {results.filename}
-                </h2>
+              <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center">
+                  <CheckCircle className="w-6 h-6 text-green-500 mr-2" />
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-800">
+                      Validation Summary
+                    </h2>
+                    <p className="text-gray-500 mt-1">
+                      File: {results.filename}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-sm text-gray-500">Completed on</div>
+                  <div className="text-gray-700 font-medium">
+                    {new Date().toLocaleDateString('en-US', {
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </div>
+                </div>
               </div>
-              
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="text-center p-6 bg-green-50 rounded-lg border border-green-200">
-                  <div className="text-3xl font-bold text-green-600 mb-2">
-                    {results.results.filter(([,status]) => status === false).length}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <div className="relative p-6 bg-gradient-to-br from-green-50 to-green-100 rounded-xl border border-green-200 overflow-hidden">
+                  <div className="relative z-10">
+                    <div className="text-4xl font-bold text-green-600 mb-1">
+                      {results.results.filter(([,status]) => status === false).length}
+                    </div>
+                    <div className="text-green-800 font-medium text-lg mb-2">Tests Passed</div>
+                    <div className="text-green-600 text-sm">
+                      {((results.results.filter(([,status]) => status === false).length / results.results.length) * 100).toFixed(0)}% Success Rate
+                    </div>
                   </div>
-                  <div className="text-green-800 font-medium">Tests Passed</div>
-                  <CheckCircle className="w-8 h-8 text-green-500 mx-auto mt-2" />
+                  <CheckCircle className="absolute bottom-0 right-0 w-16 h-16 text-green-200 transform translate-x-4 translate-y-4" />
                 </div>
                 
-                <div className="text-center p-6 bg-red-50 rounded-lg border border-red-200">
-                  <div className="text-3xl font-bold text-red-600 mb-2">
-                    {results.results.filter(([,status]) => status === true).length}
+                <div className="relative p-6 bg-gradient-to-br from-red-50 to-red-100 rounded-xl border border-red-200 overflow-hidden">
+                  <div className="relative z-10">
+                    <div className="text-4xl font-bold text-red-600 mb-1">
+                      {results.results.filter(([,status]) => status === true).length}
+                    </div>
+                    <div className="text-red-800 font-medium text-lg mb-2">Tests Failed</div>
+                    <div className="text-red-600 text-sm">
+                      Requires immediate attention
+                    </div>
                   </div>
-                  <div className="text-red-800 font-medium">Tests Failed</div>
-                  <XCircle className="w-8 h-8 text-red-500 mx-auto mt-2" />
+                  <XCircle className="absolute bottom-0 right-0 w-16 h-16 text-red-200 transform translate-x-4 translate-y-4" />
                 </div>
                 
-                <div className="text-center p-6 bg-yellow-50 rounded-lg border border-yellow-200">
-                  <div className="text-3xl font-bold text-yellow-600 mb-2">
-                    {results.results.filter(([,status]) => status === null).length}
+                <div className="relative p-6 bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-xl border border-yellow-200 overflow-hidden">
+                  <div className="relative z-10">
+                    <div className="text-4xl font-bold text-yellow-600 mb-1">
+                      {results.results.filter(([,status]) => status === null).length}
+                    </div>
+                    <div className="text-yellow-800 font-medium text-lg mb-2">Errors</div>
+                    <div className="text-yellow-600 text-sm">
+                      Check system configuration
+                    </div>
                   </div>
-                  <div className="text-yellow-800 font-medium">Errors</div>
-                  <AlertTriangle className="w-8 h-8 text-yellow-500 mx-auto mt-2" />
+                  <AlertTriangle className="absolute bottom-0 right-0 w-16 h-16 text-yellow-200 transform translate-x-4 translate-y-4" />
+                </div>
+              </div>
+
+              {/* Progress Bar */}
+              <div className="bg-gray-100 rounded-full h-4 overflow-hidden">
+                <div className="flex h-full">
+                  <div 
+                    className="bg-green-500 h-full transition-all duration-500"
+                    style={{ width: `${(results.results.filter(([,status]) => status === false).length / results.results.length) * 100}%` }}
+                  />
+                  <div 
+                    className="bg-red-500 h-full transition-all duration-500"
+                    style={{ width: `${(results.results.filter(([,status]) => status === true).length / results.results.length) * 100}%` }}
+                  />
+                  <div 
+                    className="bg-yellow-500 h-full transition-all duration-500"
+                    style={{ width: `${(results.results.filter(([,status]) => status === null).length / results.results.length) * 100}%` }}
+                  />
                 </div>
               </div>
             </div>
 
             {/* Detailed Results */}
             <div className="bg-white rounded-xl shadow-lg p-8">
-              <div className="flex items-center mb-6">
-                <FileText className="w-6 h-6 text-blue-500 mr-2" />
-                <h2 className="text-2xl font-bold text-gray-800">
-                  Detailed Validation Results
-                </h2>
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center">
+                  <FileText className="w-6 h-6 text-blue-500 mr-2" />
+                  <h2 className="text-2xl font-bold text-gray-800">
+                    Detailed Validation Results
+                  </h2>
+                </div>
+                <div className="flex space-x-2">
+                  <button className="px-3 py-1 rounded-full bg-green-100 text-green-800 text-sm font-medium hover:bg-green-200">
+                    Show Passed
+                  </button>
+                  <button className="px-3 py-1 rounded-full bg-red-100 text-red-800 text-sm font-medium hover:bg-red-200">
+                    Show Failed
+                  </button>
+                  <button className="px-3 py-1 rounded-full bg-gray-100 text-gray-800 text-sm font-medium hover:bg-gray-200">
+                    Show All
+                  </button>
+                </div>
               </div>
 
               <div className="grid gap-6">
                 {results.results.map(([name, status, message], index) => (
-                  <div
-                    key={index}
-                    className={`border rounded-lg p-6 ${getResultColor(status)}`}
-                  >
-                    <div className="flex items-center mb-4">
-                      {getResultIcon(status)}
-                      <h3 className="text-lg font-semibold text-gray-800 ml-2">
+                  <div key={index} className="result-card">
+                    <div className="result-header">
+                      <div className="result-title">
+                        {getResultIcon(status)}
                         {name}
-                      </h3>
+                        <span className={`result-status status-${status === true ? 'failed' : status === false ? 'passed' : 'error'}`}>{status === null ? 'Error' : status === true ? 'Failed' : 'Passed'}</span>
+                      </div>
                     </div>
-                    
-                    <div className="font-mono text-sm bg-white rounded-lg p-4 border">
-                      {typeof message === 'string' ? formatMessage(message) : JSON.stringify(message)}
+                    {/* Main explanation for the check */}
+                    <div className="result-section">
+                      {status === false && (
+                        <div className="text-red-700 font-semibold mb-2">This check found issues that need attention.</div>
+                      )}
+                      {status === true && (
+                        <div className="text-green-700 font-semibold mb-2">All criteria met successfully. No issues found.</div>
+                      )}
+                      {status === null && (
+                        <div className="text-yellow-700 font-semibold mb-2">This check could not be completed due to errors.</div>
+                      )}
+                      {/* Show summary stats if available */}
+                      {message.summary && message.summary.total_duplicates !== undefined && (
+                        <div className="mb-2">Found <b>{message.summary.total_duplicates}</b> duplicate OSC IDs.</div>
+                      )}
+                      {message.summary && message.summary.message && (
+                        <div className="mb-2">{message.summary.message}</div>
+                      )}
                     </div>
+                    {/* Details Table with description */}
+                    {message.details && Array.isArray(message.details) && message.details.length > 0 && (
+                      <div className="result-section">
+                        <div className="mb-1 text-gray-700">Below are the duplicate OSC IDs and how many times each appears:</div>
+                        <details>
+                          <summary className="cursor-pointer font-semibold text-blue-700 mb-2">Show technical details</summary>
+                          <table className="result-table">
+                            <thead>
+                              <tr>
+                                <th><span className="result-tooltip" title="Optical Splice Closure Identifier">OSC ID</span></th>
+                                <th><span className="result-tooltip" title="Number of times this OSC ID appears">Duplicate Count</span></th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {message.details.map((detail, i) => (
+                                <tr key={i}>
+                                  <td>{detail.osc_id}</td>
+                                  <td>{detail.duplicate_count}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </details>
+                      </div>
+                    )}
+                    {/* Sample Closures with description */}
+                    {message.summary && message.summary.sample_closures && message.summary.sample_closures.length > 0 && (
+                      <div className="result-section">
+                        <div className="mb-1 text-gray-700">Sample problematic closures (for reference):</div>
+                        <details>
+                          <summary className="cursor-pointer font-semibold text-purple-700 mb-2">Show technical details</summary>
+                          <ul className="result-list">
+                            {message.summary.sample_closures.map((closure, i) => (
+                              <li key={i}>
+                                <span className="font-medium">ID:</span> {closure.ID}, <span className="font-medium">Identifier:</span> {closure.IDENTIFIER}
+                              </li>
+                            ))}
+                          </ul>
+                        </details>
+                      </div>
+                    )}
+                    {/* Errors with suggestions */}
+                    {message.errors && message.errors.length > 0 && (
+                      <div className="result-section">
+                        <div className="mb-1 text-red-700">There were errors during this check. Please review and try again or contact support.</div>
+                        <details>
+                          <summary className="cursor-pointer font-semibold text-red-700 mb-2">Show error details</summary>
+                          <ul className="result-list">
+                            {message.errors.map((error, i) => (
+                              <li key={i}>{error.message || error}</li>
+                            ))}
+                          </ul>
+                        </details>
+                      </div>
+                    )}
+                    {/* Fallback for string messages */}
+                    {typeof message === 'string' && !message.details && !message.summary && !message.errors && (
+                      <div className="result-section">
+                        <div className="mb-1 text-gray-700">Result:</div>
+                        {message.split('\n').map((line, i) => {
+                          if (line.trim().startsWith('•')) {
+                            return (
+                              <div key={i} className="flex items-start space-x-2 pl-4">
+                                <div className="w-1.5 h-1.5 rounded-full bg-gray-400 mt-2"></div>
+                                <p className="text-gray-600">{line.replace('•', '').trim()}</p>
+                              </div>
+                            );
+                          }
+                          if (line.includes('CRITICAL') || line.includes('ERROR')) {
+                            return (
+                              <div key={i} className="flex items-start space-x-2 bg-red-50 p-3 rounded-lg border border-red-200">
+                                <AlertCircle className="w-5 h-5 text-red-500 mt-0.5" />
+                                <p className="text-red-700">{line}</p>
+                              </div>
+                            );
+                          }
+                          if (line.includes('WARNING')) {
+                            return (
+                              <div key={i} className="flex items-start space-x-2 bg-yellow-50 p-3 rounded-lg border border-yellow-200">
+                                <AlertTriangle className="w-5 h-5 text-yellow-500 mt-0.5" />
+                                <p className="text-yellow-700">{line}</p>
+                              </div>
+                            );
+                          }
+                          if (line.match(/^[A-Za-z_]+:/)) {
+                            return (
+                              <div key={i} className="flex items-start space-x-2">
+                                <span className="font-medium text-gray-700">{line.split(':')[0]}:</span>
+                                <span className="text-gray-600">{line.split(':').slice(1).join(':').trim()}</span>
+                              </div>
+                            );
+                          }
+                          if (line.startsWith('---')) {
+                            return <hr key={i} className="my-3 border-gray-200" />;
+                          }
+                          return <p key={i} className="text-gray-600">{line}</p>;
+                        })}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
